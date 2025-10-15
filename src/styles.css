@@ -1,5 +1,5 @@
 :root{
-  --bg:#fafafa; --txt:#111827; --line:#e5e7eb; --primary:#2563eb; --sel:#1d4ed8;
+  --bg:#fafafa; --txt:#111827; --line:#e5e7eb; --primary:#2563eb;
 }
 *{box-sizing:border-box}
 html,body,#root{height:100%}
@@ -8,9 +8,6 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantare
 .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.06)}
 .toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
 button.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}
-button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
-input.input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:220px}
-
 .ag-theme-quartz{
   --ag-border-color:#e5e7eb;
   --ag-header-foreground-color:#111827;
