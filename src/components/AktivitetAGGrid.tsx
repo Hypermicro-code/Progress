@@ -10,7 +10,6 @@ import type {
   GridReadyEvent,
   CellMouseDownEvent,
   CellMouseOverEvent,
-  CellMouseMoveEvent,
   CellKeyDownEvent,
 } from 'ag-grid-community'
 import 'ag-grid-community/styles/ag-grid.css'
@@ -180,16 +179,7 @@ export default function AktivitetAGGrid({
     }
   }, [anchor])
 
-  // Drag-seleksjon: bruk mousemove for stabil oppdatering
-  const onCellMouseMove = useCallback((e: CellMouseMoveEvent) => {
-    if (!dragging) return
-    if (e.colDef.field === 'id') return
-    const rowIndex = e.rowIndex ?? 0
-    const field = (e.colDef.field as keyof Aktivitet) ?? 'navn'
-    setFocus({ rowIndex, field })
-  }, [dragging])
-
-  // (mouseover beholdes for små hopp mellom celler uten ekte move)
+  // Drag-seleksjon via mouseover
   const onCellMouseOver = useCallback((e: CellMouseOverEvent) => {
     if (!dragging) return
     if (e.colDef.field === 'id') return
@@ -346,7 +336,6 @@ export default function AktivitetAGGrid({
         rowData={rowData}
         onGridReady={onGridReady}
         onCellMouseDown={onCellMouseDown}
-        onCellMouseMove={onCellMouseMove}
         onCellMouseOver={onCellMouseOver}
         onCellKeyDown={onCellKeyDown}
       />
