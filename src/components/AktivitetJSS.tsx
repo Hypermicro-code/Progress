@@ -26,6 +26,8 @@ const COLS = [
   { title: "Status", width: 150, type: "text" },
 ] as const
 
+const KEY_BY_COL = ["id","navn","start","slutt","varighet","avhengighet","ansvarlig","status"] as const
+
 const toMatrix = (rows: Aktivitet[]) =>
   rows.map(r => [
     r.id ?? "",
@@ -38,51 +40,82 @@ const toMatrix = (rows: Aktivitet[]) =>
     r.status ?? "",
   ])
 
-const toRows = (matrix: (string | number)[][]): Aktivitet[] =>
-  matrix.map((r, i) => ({
-    id: String(r[0] ?? i + 1),
-    navn: String(r[1] ?? ""),
-    start: String(r[2] ?? ""),
-    slutt: String(r[3] ?? ""),
-    varighet: r[4] === "" || r[4] == null ? undefined : Number(String(r[4]).replace(",", ".")),
-    avhengighet: String(r[5] ?? ""),
-    ansvarlig: String(r[6] ?? ""),
-    status: String(r[7] ?? ""),
-  }))
+const numberOrEmpty = (v: unknown) => {
+  const s = String(v ?? "").trim()
+  if (!s) return undefined
+  const n = Number(String(s).replace(",", "."))
+  return Number.isFinite(n) ? n : undefined
+}
 /* ==== [BLOCK: Helpers] END ==== */
 
 /* ==== [BLOCK: Component] BEGIN ==== */
 export default function AktivitetJSS({ rows, onRowsChange, filterText }: AktivitetJSSProps) {
-  const spreadsheetRef = React.useRef<any>(null)
+  const wsRef = React.useRef<any>(null)
 
-  // Enkel klientfilter: vi filtrerer visningen, men tar vare på opprinnelig data
-  const visibleData = React.useMemo(() => {
+  // Build mapping synlig ↔ original
+  const { visibleMatrix, visibleToMaster } = React.useMemo(() => {
     const q = (filterText ?? "").toLowerCase()
-    if (!q) return toMatrix(rows)
-    const hits = rows.filter(r =>
-      `${r.id} ${r.navn ?? ""} ${r.start ?? ""} ${r.slutt ?? ""} ${r.varighet ?? ""} ${r.avhengighet ?? ""} ${r.ansvarlig ?? ""} ${r.status ?? ""}`
-        .toLowerCase()
-        .includes(q)
-    )
-    return toMatrix(hits)
+    if (!q) return { visibleMatrix: toMatrix(rows), visibleToMaster: rows.map((_, i) => i) }
+    const map: number[] = []
+    const filtered: Aktivitet[] = []
+    rows.forEach((r, i) => {
+      const hay = `${r.id} ${r.navn ?? ""} ${r.start ?? ""} ${r.slutt ?? ""} ${r.varighet ?? ""} ${r.avhengighet ?? ""} ${r.ansvarlig ?? ""} ${r.status ?? ""}`.toLowerCase()
+      if (hay.includes(q)) { filtered.push(r); map.push(i) }
+    })
+    return { visibleMatrix: toMatrix(filtered), visibleToMaster: map }
   }, [rows, filterText])
 
-  // Når brukeren endrer celler i arket → oppdater React-state
-  const handleAfterChanges = React.useCallback(async (_worksheet: any, _records: any[]) => {
-    try {
-      // Hent hele datasettet fra aktivt ark og synk til rows
-      const ws = _worksheet // worksheet-objekt
-      const matrix: (string | number)[][] = ws.getData()
-      const next = toRows(matrix)
-      // re-id for enkelhet (kan erstattes av stabil ID-generator ved behov)
+  // Når parent-rows endres → oppdater Worksheet-data
+  React.useEffect(() => {
+    if (wsRef.current?.setData) wsRef.current.setData(visibleMatrix)
+  }, [visibleMatrix])
+
+  /* ==== [BLOCK: Cell change → map til rows] BEGIN ==== */
+  const handleChange = React.useCallback(
+    (_ws: any, _cell: any, x: number, y: number, value: any) => {
+      const masterRow = visibleToMaster[y] ?? y
+      if (masterRow == null) return
+      const key = KEY_BY_COL[x]!
+      const next = [...rows]
+      const base = next[masterRow] ?? { id: String(masterRow + 1), navn: "", start: "", slutt: "" }
+      next[masterRow] = {
+        ...base,
+        [key]: key === "varighet" ? numberOrEmpty(value) : String(value ?? ""),
+      }
+      // re-id for enkelhet
       for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
       onRowsChange(next)
-    } catch {
-      // Ignorer – bedre enn å kræsje UI
-    }
-  }, [onRowsChange])
+    },
+    [rows, visibleToMaster, onRowsChange]
+  )
+  /* ==== [BLOCK: Cell change → map til rows] END ==== */
 
-  // Contextmeny: enkle radoperasjoner + fill nedover
+  /* ==== [BLOCK: Insert/Delete row m/ mapping] BEGIN ==== */
+  const handleInsertRow = React.useCallback(
+    (_ws: any, vRow: number, amount: number) => {
+      const mRow = visibleToMaster[vRow] ?? vRow
+      const next = [...rows]
+      for (let i = 0; i < amount; i++) {
+        next.splice(mRow, 0, { id: "", navn: "", start: "", slutt: "", varighet: undefined, avhengighet: "", ansvarlig: "", status: "" })
+      }
+      for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
+      onRowsChange(next)
+    },
+    [rows, visibleToMaster, onRowsChange]
+  )
+
+  const handleDeleteRow = React.useCallback(
+    (_ws: any, vRow: number, amount: number) => {
+      const mRow = visibleToMaster[vRow] ?? vRow
+      const next = rows.filter((_, i) => i < mRow || i >= mRow + amount)
+      for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
+      onRowsChange(next)
+    },
+    [rows, visibleToMaster, onRowsChange]
+  )
+  /* ==== [BLOCK: Insert/Delete row m/ mapping] END ==== */
+
+  /* ==== [BLOCK: Context menu] BEGIN ==== */
   const contextMenu = React.useCallback((ws: any, x: number, y: number, _e: MouseEvent, items: any[]) => {
     const custom: any[] = [
       { title: "Ny rad over", onclick: () => ws.insertRow(1, y, 1) },
@@ -106,19 +139,13 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
     ]
     return [...custom, { type: "line" }, ...items]
   }, [])
+  /* ==== [BLOCK: Context menu] END ==== */
 
   return (
-    <Spreadsheet
-      ref={spreadsheetRef}
-      // Viktig: lytt på "afterchanges" på spreadsheet/worksheet-nivå i v5
-      onafterchanges={handleAfterChanges}
-      // De fleste Excel-ting (multi-seleksjon, copy/paste) er innebygd
-      // Tabs/toolbar er av – vi styrer via egen UI
-      tabs={false}
-      toolbar={false}
-    >
+    <Spreadsheet tabs={false} toolbar={false}>
       <Worksheet
-        data={visibleData}
+        ref={wsRef}
+        data={visibleMatrix}
         columns={COLS as any}
         defaultColWidth={120}
         tableOverflow={true}
@@ -132,6 +159,9 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
         allowManualInsertRow={true}
         allowManualDeleteRow={true}
         contextMenu={contextMenu as any}
+        onchange={handleChange as any}
+        oninsertrow={handleInsertRow as any}
+        ondeleterow={handleDeleteRow as any}
       />
     </Spreadsheet>
   )
