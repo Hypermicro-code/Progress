@@ -50,20 +50,17 @@ const numberOrEmpty = (v: unknown) => {
 
 /* ==== [BLOCK: Component] BEGIN ==== */
 export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: AktivitetGlideGridProps) {
-  /* ---- selection state ---- */
   const [selection, setSelection] = React.useState<{
     columns: CompactSelection
     rows: CompactSelection
     current?: Rectangle
   }>({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
 
-  /* ---- visible row mapping (filter) ---- */
   const visibleIndex = React.useMemo<number[]>(
     () => rows.map((_, i) => i).filter(i => isMatch(rows[i], filterText ?? "")),
     [rows, filterText]
   )
 
-  /* ---- columns ---- */
   const columns = React.useMemo<GridColumn[]>(
     () =>
       columnsSpec.map(c => ({
@@ -76,7 +73,6 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     []
   )
 
-  /* ---- read cell ---- */
   const getCellContent = React.useCallback(
     ([col, vRow]: Item): GridCell => {
       const rowIndex = visibleIndex[vRow] ?? vRow
@@ -101,9 +97,8 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     [rows, visibleIndex]
   )
 
-  /* ---- write cell (single) ---- */
   const setCell = React.useCallback(
-    (visibleRow: number, key: keyof Aktivitet, value: unknown) => {
+    (visibleRow: number, key: keyof Aktivit et, value: unknown) => {
       const masterRow = visibleIndex[visibleRow] ?? visibleRow
       const id = rows[masterRow]?.id ?? String(masterRow + 1)
       const next = [...rows]
@@ -117,7 +112,6 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     [rows, visibleIndex, onRowsChange]
   )
 
-  /* ---- edit handler ---- */
   const onCellEdited = React.useCallback(
     (cell: Item, newValue: EditableGridCell) => {
       const [col, vRow] = cell
@@ -128,16 +122,16 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     [setCell]
   )
 
-  /* ---- paste TSV ---- */
+  /* ==== [BLOCK: onPaste – corrected types & sync return] BEGIN ==== */
   const onPaste = React.useCallback(
-    async (target: Item, data: readonly (readonly (string | number)[])[]) => {
+    (target: Item, values: readonly (readonly string[])[]) => {
       const [startCol, startVRow] = target
       const next = [...rows]
-      for (let r = 0; r < data.length; r++) {
+      for (let r = 0; r < values.length; r++) {
         const vRow = startVRow + r
         const mRow = visibleIndex[vRow] ?? vRow
         if (!next[mRow]) next[mRow] = { id: String(mRow + 1), navn: "", start: "", slutt: "" }
-        const rowData = data[r]
+        const rowData = values[r]
         for (let c = 0; c < rowData.length; c++) {
           const outCol = startCol + c
           if (!columnsSpec[outCol]) continue
@@ -151,8 +145,8 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     },
     [rows, visibleIndex, onRowsChange]
   )
+  /* ==== [BLOCK: onPaste – corrected types & sync return] END ==== */
 
-  /* ---- fill down/right ---- */
   const fillDown = React.useCallback(() => {
     const rect = selection.current
     if (!rect || rect.height <= 1) return
@@ -188,7 +182,6 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     onRowsChange(next)
   }, [selection, rows, visibleIndex, onRowsChange])
 
-  /* ---- keyboard shortcuts ---- */
   const onKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().includes("MAC")
@@ -201,16 +194,12 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     [fillDown, fillRight]
   )
 
-  /* ---- context menu ---- */
   const [menu, setMenu] = React.useState<{ x: number; y: number; vRow: number; col: number } | null>(null)
-
   const closeMenu = () => setMenu(null)
-
   const onContextMenu: React.MouseEventHandler<HTMLDivElement> = (e) => {
     e.preventDefault()
     const rect = selection.current
     if (!rect) return
-    // bruk øverste venstre hjørne som target
     setMenu({ x: e.clientX, y: e.clientY, vRow: rect.y, col: rect.x })
   }
 
@@ -219,7 +208,6 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     const next = [...rows]
     const newRow: Aktivitet = { id: String(next.length + 1), navn: "", start: "", slutt: "" }
     next.splice(mRow, 0, newRow)
-    // re-id for enkelthet (kan byttes til en stabil id-generator)
     for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
     onRowsChange(next)
     closeMenu()
@@ -233,7 +221,6 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     closeMenu()
   }
 
-  /* ---- render ---- */
   const gridHeight = 560
 
   return (
@@ -253,20 +240,14 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
         height={gridHeight}
       />
 
-      {/* ---- Context menu ---- */}
       {menu && (
         <div
           style={{
             position: "fixed",
-            left: menu.x,
-            top: menu.y,
-            background: "#fff",
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            boxShadow: "0 12px 40px rgba(0,0,0,.12)",
-            padding: 6,
-            zIndex: 50,
-            minWidth: 180
+            left: menu.x, top: menu.y,
+            background: "#fff", border: "1px solid #e5e7eb",
+            borderRadius: 8, boxShadow: "0 12px 40px rgba(0,0,0,.12)",
+            padding: 6, zIndex: 50, minWidth: 180
           }}
           onMouseLeave={closeMenu}
         >
