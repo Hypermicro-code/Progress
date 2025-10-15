@@ -1,10 +1,15 @@
 /* ==== [BLOCK: Imports] BEGIN ==== */
 import React from "react"
-import jspreadsheet from "jspreadsheet-ce"
+// Robust import (pakka kan være CJS/ESM uten default)
+import * as JSS from "jspreadsheet-ce"
 import "jspreadsheet-ce/dist/jspreadsheet.css"
 import "jsuites/dist/jsuites.css"
 import type { Aktivitet } from "@/types"
+
+// Lag en fabrikk som funker uansett eksporttype
+const jspreadsheet: any = (JSS as any).default ?? (JSS as any)
 /* ==== [BLOCK: Imports] END ==== */
+
 
 /* ==== [BLOCK: Props] BEGIN ==== */
 export type AktivitetJSSProps = {
