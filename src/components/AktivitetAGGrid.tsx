@@ -132,7 +132,6 @@ export default function AktivitetAGGrid({
     const f = field as keyof Aktivitet
     const inRows = inRange(rowIndex, anchor.rowIndex, focus.rowIndex)
     const inCols = inRange(fieldOrder.indexOf(f), fieldOrder.indexOf(anchor.field), fieldOrder.indexOf(focus.field))
-    // aldri marker kolonnen 'id'
     return inRows && inCols && f !== 'id'
   }
 
@@ -164,9 +163,10 @@ export default function AktivitetAGGrid({
 
   const onCellMouseDown = useCallback((e: CellMouseDownEvent) => {
     if (e.colDef.field === 'id') return
+    const domEvt = e.event as MouseEvent | null | undefined
     const rowIndex = e.rowIndex ?? 0
     const field = (e.colDef.field as keyof Aktivitet) ?? 'navn'
-    if (e.event.shiftKey && anchor) {
+    if (domEvt?.shiftKey && anchor) {
       setFocus({ rowIndex, field })
       setDragging(true)
     } else {
@@ -226,7 +226,6 @@ export default function AktivitetAGGrid({
     try {
       await navigator.clipboard.writeText(tsv)
     } catch {
-      // fallback: skjult textarea
       const ta = document.createElement('textarea')
       ta.value = tsv
       document.body.appendChild(ta)
@@ -241,7 +240,7 @@ export default function AktivitetAGGrid({
     try {
       text = await navigator.clipboard.readText()
     } catch {
-      return // ingen tilgang
+      return
     }
     if (!text) return
     const b = getSelectionBounds()
@@ -299,22 +298,25 @@ export default function AktivitetAGGrid({
 
   const onCellKeyDown = useCallback((e: CellKeyDownEvent) => {
     if (!anchor || !focus) return
+    const kev = e.event as KeyboardEvent | null | undefined
+    if (!kev) return
     const isMac = navigator.platform.toUpperCase().includes('MAC')
-    const mod = isMac ? e.event.metaKey : e.event.ctrlKey
-    if (mod && e.event.key.toLowerCase() === 'c') {
-      e.event.preventDefault()
+    const mod = isMac ? kev.metaKey : kev.ctrlKey
+    const key = kev.key?.toLowerCase?.() ?? ''
+    if (mod && key === 'c') {
+      kev.preventDefault()
       copySelectionToClipboard()
     }
-    if (mod && e.event.key.toLowerCase() === 'v') {
-      e.event.preventDefault()
+    if (mod && key === 'v') {
+      kev.preventDefault()
       pasteClipboardIntoSelection()
     }
-    if (mod && e.event.key.toLowerCase() === 'd') {
-      e.event.preventDefault()
+    if (mod && key === 'd') {
+      kev.preventDefault()
       fillDown()
     }
-    if (mod && e.event.key.toLowerCase() === 'r') {
-      e.event.preventDefault()
+    if (mod && key === 'r') {
+      kev.preventDefault()
       fillRight()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
