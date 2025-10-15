@@ -16,11 +16,11 @@ input.input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-
   --ag-header-foreground-color:#111827;
 }
 
-/* Fokusert celle */
+/* Dempe ag-cell-focus bakgrunn så vår markering synes */
 .ag-theme-quartz .ag-cell.ag-cell-focus {
   outline: 2px solid var(--primary) !important;
   outline-offset: -1px;
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  background: transparent !important;
 }
 
 /* EGEN multi-seleksjon */
