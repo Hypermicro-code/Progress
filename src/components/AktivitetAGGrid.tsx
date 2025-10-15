@@ -9,7 +9,6 @@ import type {
   GridOptions,
   GridReadyEvent,
   CellMouseDownEvent,
-  CellMouseOverEvent,
   CellKeyDownEvent,
 } from 'ag-grid-community'
 import 'ag-grid-community/styles/ag-grid.css'
@@ -46,6 +45,7 @@ export default function AktivitetAGGrid({
   quickFilterText,
 }: AktivitetAGGridProps) {
   const apiRef = useRef<GridApi | null>(null)
+  const gridRootRef = useRef<HTMLDivElement | null>(null)
   const [rowData, setRowData] = useState<Aktivitet[]>(rows)
 
   // sync inn → lokalt
@@ -169,30 +169,52 @@ export default function AktivitetAGGrid({
     const domEvt = e.event as MouseEvent | null | undefined
     const rowIndex = e.rowIndex ?? 0
     const field = (e.colDef.field as keyof Aktivitet) ?? 'navn'
+
     if (domEvt?.shiftKey && anchor) {
       setFocus({ rowIndex, field })
-      setDragging(true)
     } else {
       setAnchor({ rowIndex, field })
       setFocus({ rowIndex, field })
-      setDragging(true)
     }
+    setDragging(true)
   }, [anchor])
 
-  // Drag-seleksjon via mouseover
-  const onCellMouseOver = useCallback((e: CellMouseOverEvent) => {
-    if (!dragging) return
-    if (e.colDef.field === 'id') return
-    const rowIndex = e.rowIndex ?? 0
-    const field = (e.colDef.field as keyof Aktivitet) ?? 'navn'
-    setFocus({ rowIndex, field })
-  }, [dragging])
-
+  // Global mousemove → finn ag-cell under pekeren og oppdater focus
   React.useEffect(() => {
-    const up = () => setDragging(false)
-    window.addEventListener('mouseup', up)
-    return () => window.removeEventListener('mouseup', up)
-  }, [])
+    if (!dragging) return
+
+    const onMove = (ev: MouseEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)
+      if (!el) return
+      const cellEl = (el as HTMLElement).closest('.ag-cell') as HTMLElement | null
+      if (!cellEl) return
+      const rowEl = cellEl.closest('.ag-row') as HTMLElement | null
+      const colId = cellEl.getAttribute('col-id') || ''
+      const rowIndexAttr =
+        rowEl?.getAttribute('row-index') ??
+        rowEl?.getAttribute('row-id') ?? // fallback
+        rowEl?.getAttribute('aria-rowindex') // fallback (1-based)
+      if (!rowIndexAttr || !colId) return
+
+      // aria-rowindex er 1-basert – juster i så fall
+      let rowIndex = Number(rowIndexAttr)
+      if (rowEl?.hasAttribute('aria-rowindex')) rowIndex = rowIndex - 1
+
+      // hopp over ID-kolonne
+      if (colId === 'id') return
+      const field = colId as keyof Aktivitet
+      setFocus({ rowIndex, field })
+    }
+
+    const onUp = () => setDragging(false)
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp, { once: true })
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [dragging])
 
   const ensureRows = (neededCount: number) => {
     if (neededCount <= rowData.length) return
@@ -330,13 +352,12 @@ export default function AktivitetAGGrid({
      BLOKK: Render
      ========================================================= */
   return (
-    <div className="ag-theme-quartz" style={{ height: 560, width: '100%' }}>
+    <div ref={gridRootRef} className="ag-theme-quartz" style={{ height: 560, width: '100%' }}>
       <AgGridReact<Aktivitet>
         gridOptions={gridOptions}
         rowData={rowData}
         onGridReady={onGridReady}
         onCellMouseDown={onCellMouseDown}
-        onCellMouseOver={onCellMouseOver}
         onCellKeyDown={onCellKeyDown}
       />
     </div>
