@@ -98,7 +98,7 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
   )
 
   const setCell = React.useCallback(
-    (visibleRow: number, key: keyof Aktivit et, value: unknown) => {
+    (visibleRow: number, key: keyof Aktivitet, value: unknown) => {
       const masterRow = visibleIndex[visibleRow] ?? visibleRow
       const id = rows[masterRow]?.id ?? String(masterRow + 1)
       const next = [...rows]
@@ -122,7 +122,7 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     [setCell]
   )
 
-  /* ==== [BLOCK: onPaste – corrected types & sync return] BEGIN ==== */
+  /* ==== [BLOCK: onPaste – sync strings] BEGIN ==== */
   const onPaste = React.useCallback(
     (target: Item, values: readonly (readonly string[])[]) => {
       const [startCol, startVRow] = target
@@ -145,7 +145,7 @@ export default function AktivitetGlideGrid({ rows, onRowsChange, filterText }: A
     },
     [rows, visibleIndex, onRowsChange]
   )
-  /* ==== [BLOCK: onPaste – corrected types & sync return] END ==== */
+  /* ==== [BLOCK: onPaste – sync strings] END ==== */
 
   const fillDown = React.useCallback(() => {
     const rect = selection.current
