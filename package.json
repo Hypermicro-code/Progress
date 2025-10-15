@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@jspreadsheet-ce/react": "5.0.10",
+    "@jspreadsheet-ce/react": "4.12.0",
     "jspreadsheet-ce": "4.12.0",
     "jsuites": "5.4.7",
     "react": "^18.3.1",
