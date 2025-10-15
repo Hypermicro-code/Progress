@@ -108,7 +108,7 @@ export default function AktivitetAGGrid({
     { headerName: 'Status', field: 'status', width: 160, editable: true },
   ], [setCell])
 
-  // Filter er AV for å fjerne filter-ikon i header
+  // Filter AV for å fjerne header-ikon
   const defaultColDef = useMemo<ColDef>(() => ({
     sortable: true,
     resizable: true,
@@ -122,13 +122,12 @@ export default function AktivitetAGGrid({
   const gridOptions = useMemo<GridOptions<Aktivitet>>(() => ({
     defaultColDef,
     columnDefs,
-    // Tydelig cell-fokus via CSS (range selection = Enterprise)
     rowSelection: 'multiple',
     suppressRowClickSelection: true,
     ensureDomOrder: true,
     suppressMultiRangeSelection: false,
     suppressClipboardPaste: false,
-    enableCellTextSelection: false, // bruk cellefokus, ikke tekstmarkering
+    enableCellTextSelection: false,
   }), [defaultColDef, columnDefs])
 
   /* =========================================================
@@ -137,12 +136,13 @@ export default function AktivitetAGGrid({
   const onGridReady = useCallback((params: GridReadyEvent) => {
     apiRef.current = params.api as GridApi
     params.api.sizeColumnsToFit({ defaultMinWidth: 80 })
-    params.api.setQuickFilter(quickFilterText ?? '')
+    // v32: bruk setGridOption for quick filter-tekst
+    params.api.setGridOption('quickFilterText', quickFilterText ?? '')
   }, [quickFilterText])
 
   // Oppdater Quick Filter live
   React.useEffect(() => {
-    apiRef.current?.setQuickFilter(quickFilterText ?? '')
+    apiRef.current?.setGridOption('quickFilterText', quickFilterText ?? '')
   }, [quickFilterText])
 
   const addRows = (n = 1) => {
