@@ -16,6 +16,11 @@ input.input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-
   --ag-header-foreground-color:#111827;
 }
 
+/* Slå av rad-hover (maskerer ofte markering) */
+.ag-theme-quartz .ag-row-hover .ag-cell {
+  background: transparent !important;
+}
+
 /* Dempe ag-cell-focus bakgrunn så vår markering synes */
 .ag-theme-quartz .ag-cell.ag-cell-focus {
   outline: 2px solid var(--primary) !important;
