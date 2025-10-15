@@ -1,10 +1,15 @@
 /* ==== [BLOCK: Imports] BEGIN ==== */
 import React from "react"
-import JSpreadsheet, { JSpreadsheetInstance } from "@jspreadsheet-ce/react"
+// NB: v5 eksporterer default som CommonJS/UMD – hent den robust:
+import * as JSSReact from "@jspreadsheet-ce/react"
 import "jspreadsheet-ce/dist/jspreadsheet.css"
 import "jsuites/dist/jsuites.css"
 import type { Aktivitet } from "@/types"
 /* ==== [BLOCK: Imports] END ==== */
+
+/* ==== [BLOCK: Resolve React component] BEGIN ==== */
+const JSpreadsheet: any = (JSSReact as any).default ?? (JSSReact as any)
+/* ==== [BLOCK: Resolve React component] END ==== */
 
 /* ==== [BLOCK: Props] BEGIN ==== */
 export type AktivitetJSSProps = {
@@ -41,7 +46,8 @@ const toMatrix = (rows: Aktivitet[]) =>
 
 /* ==== [BLOCK: Component] BEGIN ==== */
 export default function AktivitetJSS({ rows, onRowsChange, filterText }: AktivitetJSSProps) {
-  const jref = React.useRef<JSpreadsheetInstance | null>(null)
+  // Bruk any for instans i v5 – wrapperen eksporterer ikke TS-typen
+  const jref = React.useRef<any>(null)
 
   // filtrert visning (enkel klientfilter)
   const visibleRows = React.useMemo(() => {
@@ -57,11 +63,12 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   // sync fra props til grid (når rows endres utenfra)
   React.useEffect(() => {
     if (!jref.current) return
+    // v5: setData finnes på instansen
     jref.current.setData(toMatrix(visibleRows))
   }, [visibleRows])
 
   const handleAfterChange = React.useCallback(
-    (instance: JSpreadsheetInstance, cell: any, x: number, y: number, value: any) => {
+    (_instance: any, _cell: any, x: number, y: number, value: any) => {
       // mappe tilbake endring til rows (y er radindex i visibleRows)
       const globalRowIndex = rows.indexOf(visibleRows[y] ?? rows[y])
       if (globalRowIndex < 0) return
@@ -70,7 +77,9 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
       const key = keyByCol[x]!
       const next = [...rows]
       const row = { ...(next[globalRowIndex] ?? { id: String(globalRowIndex + 1) }) }
-      ;(row as any)[key] = key === "varighet" ? (value === "" ? undefined : Number(String(value).replace(",", "."))) : value
+      ;(row as any)[key] = key === "varighet"
+        ? (value === "" ? undefined : Number(String(value).replace(",", ".")))
+        : value
       next[globalRowIndex] = row
       onRowsChange(next)
     },
@@ -78,14 +87,13 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   )
 
   const handleInsertRow = React.useCallback(
-    (instance: JSpreadsheetInstance, rowNumber: number, amount: number) => {
+    (_instance: any, rowNumber: number, amount: number) => {
       const next = [...rows]
       for (let i = 0; i < amount; i++) {
         next.splice(rowNumber, 0, {
           id: "", navn: "", start: "", slutt: "", varighet: undefined, avhengighet: "", ansvarlig: "", status: ""
         })
       }
-      // re-id for enkelhet
       for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
       onRowsChange(next)
     },
@@ -93,7 +101,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   )
 
   const handleDeleteRow = React.useCallback(
-    (instance: JSpreadsheetInstance, rowNumber: number, amount: number) => {
+    (_instance: any, rowNumber: number, amount: number) => {
       const next = rows.filter((_, i) => i < rowNumber || i >= rowNumber + amount)
       for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
       onRowsChange(next)
@@ -104,7 +112,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   return (
     <div>
       <JSpreadsheet
-        ref={jref as any}
+        ref={jref}
         options={{
           data: toMatrix(visibleRows),
           columns: COLUMNS,
@@ -115,7 +123,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
           allowManualInsertRow: true,
           allowManualDeleteRow: true,
           // Kopi/lim er innebygd; kontekstmeny tilpasset
-          contextMenu: (obj: any, x: number, y: number, e: MouseEvent, items: any[]) => {
+          contextMenu: (obj: any, x: number, y: number, _e: MouseEvent, items: any[]) => {
             const custom: any[] = [
               { title: "Ny rad over", onclick: () => obj.insertRow(1, y, 1) },
               { title: "Ny rad under", onclick: () => obj.insertRow(1, y + 1, 1) },
