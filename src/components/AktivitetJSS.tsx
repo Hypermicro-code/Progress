@@ -50,9 +50,10 @@ const numberOrEmpty = (v: unknown) => {
 
 /* ==== [BLOCK: Component] BEGIN ==== */
 export default function AktivitetJSS({ rows, onRowsChange, filterText }: AktivitetJSSProps) {
-  const wsRef = React.useRef<any>(null)
+  // Lagre worksheet-instans via onload (ikke ref)
+  const [ws, setWs] = React.useState<any | null>(null)
 
-  // Build mapping synlig ↔ original
+  // Synlig matrise + mapping synlig→original
   const { visibleMatrix, visibleToMaster } = React.useMemo(() => {
     const q = (filterText ?? "").toLowerCase()
     if (!q) return { visibleMatrix: toMatrix(rows), visibleToMaster: rows.map((_, i) => i) }
@@ -65,10 +66,10 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
     return { visibleMatrix: toMatrix(filtered), visibleToMaster: map }
   }, [rows, filterText])
 
-  // Når parent-rows endres → oppdater Worksheet-data
+  // Oppdater data i arket når visningen endres
   React.useEffect(() => {
-    if (wsRef.current?.setData) wsRef.current.setData(visibleMatrix)
-  }, [visibleMatrix])
+    if (ws?.setData) ws.setData(visibleMatrix)
+  }, [ws, visibleMatrix])
 
   /* ==== [BLOCK: Cell change → map til rows] BEGIN ==== */
   const handleChange = React.useCallback(
@@ -82,7 +83,6 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
         ...base,
         [key]: key === "varighet" ? numberOrEmpty(value) : String(value ?? ""),
       }
-      // re-id for enkelhet
       for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
       onRowsChange(next)
     },
@@ -116,22 +116,22 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   /* ==== [BLOCK: Insert/Delete row m/ mapping] END ==== */
 
   /* ==== [BLOCK: Context menu] BEGIN ==== */
-  const contextMenu = React.useCallback((ws: any, x: number, y: number, _e: MouseEvent, items: any[]) => {
+  const contextMenu = React.useCallback((w: any, x: number, y: number, _e: MouseEvent, items: any[]) => {
     const custom: any[] = [
-      { title: "Ny rad over", onclick: () => ws.insertRow(1, y, 1) },
-      { title: "Ny rad under", onclick: () => ws.insertRow(1, y + 1, 1) },
+      { title: "Ny rad over", onclick: () => w.insertRow(1, y, 1) },
+      { title: "Ny rad under", onclick: () => w.insertRow(1, y + 1, 1) },
       { type: "line" },
-      { title: "Slett rad", onclick: () => ws.deleteRow(y, 1) },
+      { title: "Slett rad", onclick: () => w.deleteRow(y, 1) },
       { type: "line" },
       {
         title: "Fyll ned (kopier øverste verdi)",
         onclick: () => {
-          const sel = ws.getSelectedRows(true)
+          const sel = w.getSelectedRows(true)
           if (!sel?.length) return
           const [r0, r1] = sel[0]
           for (let r = r0 + 1; r <= r1; r++) {
-            for (let c = ws.selectedCell[0]; c <= ws.selectedCell[2]; c++) {
-              ws.setValueFromCoords(c, r, ws.getValueFromCoords(ws.selectedCell[0], r0))
+            for (let c = w.selectedCell[0]; c <= w.selectedCell[2]; c++) {
+              w.setValueFromCoords(c, r, w.getValueFromCoords(w.selectedCell[0], r0))
             }
           }
         }
@@ -144,7 +144,8 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   return (
     <Spreadsheet tabs={false} toolbar={false}>
       <Worksheet
-        ref={wsRef}
+        // Hent instansen når arket er klart
+        onload={(instance: any) => setWs(instance)}
         data={visibleMatrix}
         columns={COLS as any}
         defaultColWidth={120}
