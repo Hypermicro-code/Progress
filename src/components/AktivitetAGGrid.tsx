@@ -1,89 +1,179 @@
 /* =========================================================
-valueSetter: (p: ValueSetterParams<Aktivitet>) => { setCell(p.data!.id, 'start', String(p.newValue ?? '')); return true }
-},
-{
-headerName: 'Slutt', field: 'slutt', width: 140, editable: true,
-valueSetter: (p: ValueSetterParams<Aktivitet>) => { setCell(p.data!.id, 'slutt', String(p.newValue ?? '')); return true }
-},
-{
-headerName: 'Varighet', field: 'varighet', width: 120, editable: true,
-valueGetter: (p) => p.data?.varighet ?? '',
-valueSetter: (p) => { setCell(p.data!.id, 'varighet', numberParser(p.newValue)); return true },
-type: 'numericColumn'
-},
-{ headerName: 'Avhengighet', field: 'avhengighet', width: 160, editable: true },
-{ headerName: 'Ansvarlig', field: 'ansvarlig', width: 160, editable: true },
-{ headerName: 'Status', field: 'status', width: 160, editable: true },
-], [setCell])
-
-
-const defaultColDef = useMemo<ColDef>(() => ({
-sortable: true,
-resizable: true,
-filter: true,
-editable: true,
-}), [])
-
+   BLOKK: Imports
+   ========================================================= */
+import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { AgGridReact } from 'ag-grid-react'
+import type {
+  ColDef,
+  GridApi,
+  GridOptions,
+  GridReadyEvent,
+} from 'ag-grid-community'
+import 'ag-grid-community/styles/ag-grid.css'
+import 'ag-grid-community/styles/ag-theme-quartz.css'
+import type { Aktivitet } from '@/types'
 
 /* =========================================================
-BLOKK: Grid options (Excel-lignende)
-========================================================= */
-const gridOptions = useMemo<GridOptions<Aktivitet>>(() => ({
-defaultColDef,
-columnDefs,
-enableRangeSelection: true,
-enableRangeHandle: true,
-enableFillHandle: true,
-undoRedoCellEditing: true,
-undoRedoCellEditingLimit: 100,
-rowSelection: 'multiple',
-ensureDomOrder: true,
-suppressMultiRangeSelection: false,
-// Tillat kopier/lim (tekst)
-suppressClipboardPaste: false,
-enableCellTextSelection: true,
-}), [defaultColDef, columnDefs])
-
+   BLOKK: Props
+   ========================================================= */
+export type AktivitetAGGridProps = {
+  rows: Aktivitet[]
+  onRowsChange: (next: Aktivitet[]) => void
+}
 
 /* =========================================================
-BLOKK: Handlere
-========================================================= */
-const onGridReady = useCallback((params: any) => {
-apiRef.current = params.api as GridApi
-params.api.sizeColumnsToFit({ defaultMinWidth: 80 })
-}, [])
-
-
-const addRows = (n = 1) => {
-const maxId = rowData.reduce((m, r) => Math.max(m, Number(r.id || 0)), 0)
-const next: Aktivitet[] = [...rowData]
-for (let i = 1; i <= n; i++) {
-next.push({ id: String(maxId + i), navn: '', start: '', slutt: '', ansvarlig: '', status: '' })
-}
-onRowsChange(next)
+   BLOKK: Hjelpere
+   ========================================================= */
+const numberParser = (v: unknown) => {
+  const s = String(v ?? '').trim()
+  if (!s) return undefined
+  const n = Number(s.replace(/,/g, '.'))
+  return Number.isFinite(n) ? n : undefined
 }
 
+/* =========================================================
+   BLOKK: Komponent
+   ========================================================= */
+export default function AktivitetAGGrid({ rows, onRowsChange }: AktivitetAGGridProps) {
+  const apiRef = useRef<GridApi | null>(null)
+  const [rowData, setRowData] = useState<Aktivitet[]>(rows)
 
-// Valgfritt: hvis du limer inn flere rader enn som finnes, append flere
-const onPasteEnd = useCallback((e: any) => {
-const rowsPasted = e?.data?.length ?? 0
-if (!rowsPasted) return
-const focused = apiRef.current?.getFocusedCell()
-if (!focused) return
-const startRow = focused.rowIndex ?? 0
-const need = Math.max(0, startRow + rowsPasted - rowData.length)
-if (need > 0) addRows(need)
-}, [rowData])
+  // sync inn → lokalt
+  React.useEffect(() => setRowData(rows), [rows])
 
+  const setCell = useCallback(
+    (id: string, field: keyof Aktivitet, value: unknown) => {
+      onRowsChange(
+        rowData.map(r => (r.id === id ? { ...r, [field]: value } as Aktivitet : r))
+      )
+    },
+    [onRowsChange, rowData]
+  )
 
-return (
-<div className="ag-theme-quartz" style={{ height: 560, width: '100%' }}>
-<AgGridReact<Aktivitet>
-gridOptions={gridOptions}
-rowData={rowData}
-onGridReady={onGridReady}
-onPasteEnd={onPasteEnd}
-/>
-</div>
-)
+  /* =========================================================
+     BLOKK: Kolonner
+     ========================================================= */
+  const columnDefs = useMemo<ColDef<Aktivitet>[]>(() => [
+    {
+      headerName: '#',
+      field: 'id',
+      width: 80,
+      pinned: 'left',
+      editable: false,
+      valueGetter: (p) => p.data?.id ?? '',
+    },
+    { headerName: 'Navn', field: 'navn', minWidth: 220, flex: 1, editable: true },
+    {
+      headerName: 'Start',
+      field: 'start',
+      width: 140,
+      editable: true,
+      valueSetter: (p) => {
+        if (!p.data) return false
+        setCell(p.data.id, 'start', String(p.newValue ?? ''))
+        return true
+      },
+    },
+    {
+      headerName: 'Slutt',
+      field: 'slutt',
+      width: 140,
+      editable: true,
+      valueSetter: (p) => {
+        if (!p.data) return false
+        setCell(p.data.id, 'slutt', String(p.newValue ?? ''))
+        return true
+      },
+    },
+    {
+      headerName: 'Varighet',
+      field: 'varighet',
+      width: 120,
+      editable: true,
+      valueGetter: (p) => p.data?.varighet ?? '',
+      valueSetter: (p) => {
+        if (!p.data) return false
+        setCell(p.data.id, 'varighet', numberParser(p.newValue))
+        return true
+      },
+      type: 'numericColumn',
+    },
+    { headerName: 'Avhengighet', field: 'avhengighet', width: 160, editable: true },
+    { headerName: 'Ansvarlig', field: 'ansvarlig', width: 160, editable: true },
+    { headerName: 'Status', field: 'status', width: 160, editable: true },
+  ], [setCell])
+
+  const defaultColDef = useMemo<ColDef>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: true,
+    editable: true,
+  }), [])
+
+  /* =========================================================
+     BLOKK: Grid options (Excel-lignende)
+     ========================================================= */
+  const gridOptions = useMemo<GridOptions<Aktivitet>>(() => ({
+    defaultColDef,
+    columnDefs,
+    enableRangeSelection: true,
+    enableRangeHandle: true, // drag i hjørnet av markering
+    enableFillHandle: true,  // auto-fill
+    undoRedoCellEditing: true,
+    undoRedoCellEditingLimit: 100,
+    rowSelection: 'multiple',
+    ensureDomOrder: true,
+    suppressMultiRangeSelection: false,
+    suppressClipboardPaste: false, // tillat paste
+    enableCellTextSelection: true,
+  }), [defaultColDef, columnDefs])
+
+  /* =========================================================
+     BLOKK: Handlere
+     ========================================================= */
+  const onGridReady = useCallback((params: GridReadyEvent) => {
+    apiRef.current = params.api as GridApi
+    params.api.sizeColumnsToFit({ defaultMinWidth: 80 })
+  }, [])
+
+  const addRows = (n = 1) => {
+    const maxId = rowData.reduce((m, r) => Math.max(m, Number(r.id || 0)), 0)
+    const next: Aktivitet[] = [...rowData]
+    for (let i = 1; i <= n; i++) {
+      next.push({
+        id: String(maxId + i),
+        navn: '',
+        start: '',
+        slutt: '',
+        ansvarlig: '',
+        status: '',
+      })
+    }
+    onRowsChange(next)
+  }
+
+  // Append flere rader automatisk ved stor paste
+  const onPasteEnd = useCallback((e: any) => {
+    const rowsPasted = Array.isArray(e?.data) ? e.data.length : 0
+    if (!rowsPasted) return
+    const focused = apiRef.current?.getFocusedCell()
+    if (!focused) return
+    const startRow = focused.rowIndex ?? 0
+    const need = Math.max(0, startRow + rowsPasted - rowData.length)
+    if (need > 0) addRows(need)
+  }, [rowData])
+
+  /* =========================================================
+     BLOKK: Render
+     ========================================================= */
+  return (
+    <div className="ag-theme-quartz" style={{ height: 560, width: '100%' }}>
+      <AgGridReact<Aktivitet>
+        gridOptions={gridOptions}
+        rowData={rowData}
+        onGridReady={onGridReady}
+        onPasteEnd={onPasteEnd}
+      />
+    </div>
+  )
 }
