@@ -1,7 +1,6 @@
 /* ==== [BLOCK: Imports] BEGIN ==== */
 import React from "react"
-// Merk: CSS lastes nå også via CDN i index.html.
-// Behold linjene under hvis du ønsker lokal CSS også – det skader ikke.
+// CSS lastes allerede via CDN i index.html (anbefalt); men å ha lokale imports skader ikke:
 // import "jspreadsheet-ce/dist/jspreadsheet.css"
 // import "jsuites/dist/jsuites.css"
 import type { Aktivitet } from "@/types"
@@ -17,14 +16,14 @@ export type AktivitetJSSProps = {
 
 /* ==== [BLOCK: Helpers] BEGIN ==== */
 const COLS = [
-  { title: "#", width: 70, type: "text", readOnly: true },
-  { title: "Navn", width: 240, type: "text" },
-  { title: "Start", width: 120, type: "text" },
-  { title: "Slutt", width: 120, type: "text" },
-  { title: "Varighet", width: 110, type: "numeric" },
-  { title: "Avhengighet", width: 150, type: "text" },
-  { title: "Ansvarlig", width: 150, type: "text" },
-  { title: "Status", width: 150, type: "text" },
+  { title: "#", width: 70 },
+  { title: "Navn", width: 240 },
+  { title: "Start", width: 120 },
+  { title: "Slutt", width: 120 },
+  { title: "Varighet", width: 110 },
+  { title: "Avhengighet", width: 150 },
+  { title: "Ansvarlig", width: 150 },
+  { title: "Status", width: 150 },
 ] as const
 
 const KEY_BY_COL = ["id","navn","start","slutt","varighet","avhengighet","ansvarlig","status"] as const
@@ -61,6 +60,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   const sheetRef = React.useRef<any | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [ready, setReady] = React.useState(false)
+  const [showFallback, setShowFallback] = React.useState(true) // vis enkel tabell til grid er klart
 
   // Synlig matrise + mapping synlig→original
   const { visibleMatrix, visibleToMaster } = React.useMemo(() => {
@@ -83,12 +83,14 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
 
     const start = async () => {
       try {
-        // 1) Prøv fra window (CDN)
-        let factory = resolveFactoryFromWindow()
+        // Vent et mikro-tikk for layout, og la fallback vises imens
+        const factoryFromWindow = resolveFactoryFromWindow()
+        let factory = factoryFromWindow
 
-        // 2) Fallback: dynamisk import
         if (!factory) {
+          // Fallback: dynamisk import – håndterer ESM/CJS-varianter
           const mod = await import("jspreadsheet-ce")
+          if (cancelled) return
           const cand = [
             (mod as any)?.default?.jspreadsheet,
             (mod as any)?.jspreadsheet,
@@ -99,12 +101,12 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
           factory = (cand as any) ?? resolveFactoryFromWindow()
         }
         if (cancelled) return
-        if (!factory) throw new Error("Fant ikke jspreadsheet (hverken via CDN eller import).")
+        if (!factory) throw new Error("Fant ikke jspreadsheet (via CDN eller import).")
 
         el.innerHTML = ""
         const inst = factory(el, {
           data: visibleMatrix,
-          columns: COLS as any,
+          columns: COLS.map(c => ({ title: c.title, width: c.width, type: "text" })) as any,
           defaultColWidth: 120,
           tableOverflow: true,
           tableHeight: "560px",
@@ -167,11 +169,15 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
             return [...custom, { type: "line" }, ...items]
           },
         })
+
         sheetRef.current = inst
-        setError(null)
         setReady(true)
+        setShowFallback(false) // skjul fallback når grid er oppe
+        setError(null)
       } catch (e: any) {
         setError(e?.message || String(e))
+        // Vis fallback-tabell hvis grid ikke starter
+        setShowFallback(true)
         console.error("[Progress] jspreadsheet init feilet:", e)
       }
     }
@@ -190,16 +196,67 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   }, [ready, visibleMatrix])
 
   return (
-    <div style={{ position: "relative", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", background:"#fff" }}>
+    <div style={{ position: "relative" }}>
+      {/* Fallback-tabell (ren React) – skjules når grid er klart */}
+      {showFallback && (
+        <div style={{
+          border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", background:"#fff",
+          padding: 8, marginBottom: 8
+        }}>
+          <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+            Viser enkel forhåndsvisning mens regnearket lastes…
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth: 720 }}>
+              <thead>
+                <tr>
+                  {COLS.map(c => (
+                    <th key={c.title} style={{ textAlign:"left", padding:"6px 8px", borderBottom:"1px solid #e5e7eb", fontWeight:600 }}>{c.title}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleMatrix.slice(0, 12).map((r, idx) => (
+                  <tr key={idx}>
+                    {r.map((v, i) => (
+                      <td key={i} style={{ padding:"6px 8px", borderBottom:"1px solid #f3f4f6", color:"#111827" }}>
+                        {String(v ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {visibleMatrix.length === 0 && (
+                  <tr><td colSpan={COLS.length} style={{ padding:12, color:"#6b7280" }}>Ingen rader</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Grid-container */}
+      <div
+        ref={containerRef}
+        style={{
+          minHeight: 560,
+          width: "100%",
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 8,
+          overflow: "hidden",
+          display: showFallback ? "none" : "block"
+        }}
+      />
+
+      {/* Feil-overlay om noe gikk galt */}
       {error && (
-        <div style={{ position:"absolute", inset:0, display:"grid", placeItems:"center", color:"#b91c1c", background:"#fff" }}>
+        <div style={{ position:"absolute", inset:0, display:"grid", placeItems:"center", color:"#b91c1c" }}>
           <div>
             <div style={{ fontWeight:700, marginBottom:8 }}>Kunne ikke starte tabellen</div>
             <div style={{ fontSize:14 }}>{error}</div>
           </div>
         </div>
       )}
-      <div ref={containerRef} style={{ minHeight: 560, width: "100%" }} />
     </div>
   )
 }
