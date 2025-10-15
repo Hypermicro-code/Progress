@@ -1,12 +1,31 @@
 :root{
---bg:#fafafa; --txt:#111827; --line:#e5e7eb;
+  --bg:#fafafa; --txt:#111827; --line:#e5e7eb; --primary:#2563eb;
 }
 *{box-sizing:border-box}
 html,body,#root{height:100%}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica,Arial;background:var(--bg);color:var(--txt)}
 .wrapper{max-width:1200px;margin:24px auto;padding:0 16px}
 .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.06)}
-.toolbar{display:flex;gap:8px;margin-bottom:12px}
+.toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
 button.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}
-button.primary{background:#2563eb;color:#fff;border-color:#2563eb}
-.ag-theme-quartz{--ag-border-color:#e5e7eb; --ag-header-foreground-color:#111827}
+button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+input.input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:220px}
+
+.ag-theme-quartz{
+  --ag-border-color:#e5e7eb;
+  --ag-header-foreground-color:#111827;
+}
+
+/* === TYDELIG CELLEMARKERING (fokus) === */
+.ag-theme-quartz .ag-cell.ag-cell-focus {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* Hvis range-selection er tilgjengelig (Enterprise), gjør den mer tydelig */
+.ag-theme-quartz .ag-cell.ag-cell-range-selected,
+.ag-theme-quartz .ag-cell.ag-cell-range-single-cell {
+  background: color-mix(in srgb, var(--primary) 14%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent);
+}
