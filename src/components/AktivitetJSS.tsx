@@ -4,19 +4,22 @@ import * as JSS from "jspreadsheet-ce"
 import "jspreadsheet-ce/dist/jspreadsheet.css"
 import "jsuites/dist/jsuites.css"
 import type { Aktivitet } from "@/types"
-
-/** Robust fabrikk: støtt default, .jspreadsheet og .jexcel */
-const jspFactory = (() => {
-  const m = JSS as any
-  return (m?.default && typeof m.default === "function")
-    ? m.default
-    : (typeof m?.jspreadsheet === "function")
-    ? m.jspreadsheet
-    : (typeof m?.jexcel === "function")
-    ? m.jexcel
-    : null
-})()
 /* ==== [BLOCK: Imports] END ==== */
+
+/* ==== [BLOCK: Factory resolver] BEGIN ==== */
+function resolveJspreadsheetFactory(mod: any): ((el: HTMLElement, opts: any) => any) | null {
+  const cand = [
+    mod?.default?.jspreadsheet,
+    mod?.jspreadsheet,
+    mod?.default?.jexcel,
+    mod?.jexcel,
+    mod?.default, // enkelte builds eksporterer selve funksjonen som default
+  ]
+  for (const c of cand) if (typeof c === "function") return c
+  return null
+}
+const jspFactory = resolveJspreadsheetFactory(JSS)
+/* ==== [BLOCK: Factory resolver] END ==== */
 
 /* ==== [BLOCK: Props] BEGIN ==== */
 export type AktivitetJSSProps = {
@@ -64,6 +67,7 @@ const numberOrEmpty = (v: unknown) => {
 export default function AktivitetJSS({ rows, onRowsChange, filterText }: AktivitetJSSProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const [sheet, setSheet] = React.useState<any | null>(null)
+  const [factoryMissing, setFactoryMissing] = React.useState<boolean>(!jspFactory)
 
   // Synlig matrise + mapping synlig→original
   const { visibleMatrix, visibleToMaster } = React.useMemo(() => {
@@ -82,13 +86,22 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   React.useEffect(() => {
     if (!containerRef.current || sheet) return
 
-    // Rydd container
-    containerRef.current.innerHTML = ""
+    // fallback: prøv å resolve på nytt (noen bundlere setter på window)
+    let factory = jspFactory as any
+    if (!factory && typeof (window as any) !== "undefined") {
+      const wm = (window as any)
+      factory = wm.jspreadsheet ?? wm.jexcel ?? wm.Jspreadsheet ?? null
+    }
+    if (!factory) {
+      console.error("[Progress] Fant ikke jspreadsheet-fabrikk i modulen eller window.")
+      setFactoryMissing(true)
+      return
+    }
+    setFactoryMissing(false)
 
-    // Vent til DOM er klar (sikrer riktig mål)
+    containerRef.current.innerHTML = ""
     const raf = requestAnimationFrame(() => {
-      if (!jspFactory) return
-      const instance = jspFactory(containerRef.current!, {
+      const instance = factory(containerRef.current!, {
         data: visibleMatrix,
         columns: COLS as any,
         defaultColWidth: 120,
@@ -178,10 +191,20 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   }, [sheet, visibleMatrix])
 
   return (
-    <div
-      ref={containerRef}
-      style={{ minHeight: 560, width: "100%" }}
-    />
+    <div style={{ position: "relative" }}>
+      {factoryMissing && (
+        <div style={{ position:"absolute", inset:0, display:"grid", placeItems:"center", color:"#6b7280" }}>
+          <div>
+            <div style={{ fontWeight:600, marginBottom:8 }}>Kunne ikke laste grid-motoren</div>
+            <div style={{ fontSize:14 }}>Sjekk at <code>jspreadsheet-ce</code> er installert og eksporteres riktig.</div>
+          </div>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        style={{ minHeight: 560, width: "100%", opacity: factoryMissing ? 0.2 : 1 }}
+      />
+    </div>
   )
 }
 /* ==== [BLOCK: Component] END ==== */
