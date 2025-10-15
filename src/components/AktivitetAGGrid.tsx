@@ -10,6 +10,7 @@ import type {
   GridReadyEvent,
   CellMouseDownEvent,
   CellMouseOverEvent,
+  CellMouseMoveEvent,
   CellKeyDownEvent,
 } from 'ag-grid-community'
 import 'ag-grid-community/styles/ag-grid.css'
@@ -87,7 +88,7 @@ export default function AktivitetAGGrid({
     { headerName: 'Status', field: 'status', width: 160, editable: true },
   ], [setCell])
 
-  // Filter AV for å fjerne header-ikon
+  // Filter AV for å fjerne header-ikon + våre cellClassRules for markering
   const defaultColDef = useMemo<ColDef>(() => ({
     sortable: true,
     resizable: true,
@@ -107,9 +108,9 @@ export default function AktivitetAGGrid({
     columnDefs,
     rowSelection: 'multiple',
     suppressRowClickSelection: true,
-    suppressClickEdit: true,          // viktig for å kunne dra-selektere uten å gå i edit
+    suppressClickEdit: true,           // gjør drag-seleksjon smooth
     ensureDomOrder: true,
-    suppressMultiRangeSelection: true, // vi lager egen
+    suppressMultiRangeSelection: true, // vi lager egen seleksjon
     suppressClipboardPaste: false,
     enableCellTextSelection: false,
     suppressCopyRowsToClipboard: true, // vi håndterer kopi selv
@@ -122,10 +123,10 @@ export default function AktivitetAGGrid({
   const [anchor, setAnchor] = useState<CellRef | null>(null)
   const [focus, setFocus] = useState<CellRef | null>(null)
 
-  // Re-render cellestiler når utvalget endres
+  // Full refresh av celler når utvalget endres
   React.useEffect(() => {
-    apiRef.current?.refreshCells({ force: true, columns: editableFields as string[] })
-  }, [anchor, focus, dragging, editableFields])
+    apiRef.current?.refreshCells({ force: true, suppressFlash: true })
+  }, [anchor, focus, dragging])
 
   // Hjelpeoppslag for kolonnerekkefølge
   const fieldOrder = React.useMemo(() => (['id', ...editableFields] as (keyof Aktivitet)[]), [editableFields])
@@ -179,6 +180,16 @@ export default function AktivitetAGGrid({
     }
   }, [anchor])
 
+  // Drag-seleksjon: bruk mousemove for stabil oppdatering
+  const onCellMouseMove = useCallback((e: CellMouseMoveEvent) => {
+    if (!dragging) return
+    if (e.colDef.field === 'id') return
+    const rowIndex = e.rowIndex ?? 0
+    const field = (e.colDef.field as keyof Aktivitet) ?? 'navn'
+    setFocus({ rowIndex, field })
+  }, [dragging])
+
+  // (mouseover beholdes for små hopp mellom celler uten ekte move)
   const onCellMouseOver = useCallback((e: CellMouseOverEvent) => {
     if (!dragging) return
     if (e.colDef.field === 'id') return
@@ -335,6 +346,7 @@ export default function AktivitetAGGrid({
         rowData={rowData}
         onGridReady={onGridReady}
         onCellMouseDown={onCellMouseDown}
+        onCellMouseMove={onCellMouseMove}
         onCellMouseOver={onCellMouseOver}
         onCellKeyDown={onCellKeyDown}
       />
