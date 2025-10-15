@@ -107,6 +107,7 @@ export default function AktivitetAGGrid({
     columnDefs,
     rowSelection: 'multiple',
     suppressRowClickSelection: true,
+    suppressClickEdit: true,          // viktig for å kunne dra-selektere uten å gå i edit
     ensureDomOrder: true,
     suppressMultiRangeSelection: true, // vi lager egen
     suppressClipboardPaste: false,
@@ -121,11 +122,13 @@ export default function AktivitetAGGrid({
   const [anchor, setAnchor] = useState<CellRef | null>(null)
   const [focus, setFocus] = useState<CellRef | null>(null)
 
+  // Re-render cellestiler når utvalget endres
+  React.useEffect(() => {
+    apiRef.current?.refreshCells({ force: true, columns: editableFields as string[] })
+  }, [anchor, focus, dragging, editableFields])
+
   // Hjelpeoppslag for kolonnerekkefølge
-  const fieldOrder = useMemo(() => {
-    const order: (keyof Aktivitet)[] = ['id', ...editableFields]
-    return order
-  }, [])
+  const fieldOrder = React.useMemo(() => (['id', ...editableFields] as (keyof Aktivitet)[]), [editableFields])
 
   const isCellSelected = (rowIndex: number, field: string) => {
     if (!anchor || !focus) return false
