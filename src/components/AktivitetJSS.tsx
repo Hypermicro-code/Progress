@@ -1,7 +1,9 @@
 /* ==== [BLOCK: Imports] BEGIN ==== */
 import React from "react"
-import "jspreadsheet-ce/dist/jspreadsheet.css"
-import "jsuites/dist/jsuites.css"
+// Merk: CSS lastes nå også via CDN i index.html.
+// Behold linjene under hvis du ønsker lokal CSS også – det skader ikke.
+// import "jspreadsheet-ce/dist/jspreadsheet.css"
+// import "jsuites/dist/jsuites.css"
 import type { Aktivitet } from "@/types"
 /* ==== [BLOCK: Imports] END ==== */
 
@@ -46,16 +48,10 @@ const numberOrEmpty = (v: unknown) => {
   return Number.isFinite(n) ? n : undefined
 }
 
-function resolveFactory(mod: any): ((el: HTMLElement, opts: any) => any) | null {
-  const cands = [
-    mod?.default?.jspreadsheet,
-    mod?.jspreadsheet,
-    mod?.default?.jexcel,
-    mod?.jexcel,
-    typeof mod?.default === "function" ? mod.default : null,
-  ]
-  for (const f of cands) if (typeof f === "function") return f
-  return null
+function resolveFactoryFromWindow(): ((el: HTMLElement, opts: any) => any) | null {
+  if (typeof window === "undefined") return null
+  const w = window as any
+  return w.jspreadsheet || w.jexcel || w.Jspreadsheet || null
 }
 /* ==== [BLOCK: Helpers] END ==== */
 
@@ -79,19 +75,34 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
     return { visibleMatrix: toMatrix(filtered), visibleToMaster: map }
   }, [rows, filterText])
 
-  // Init: last jspreadsheet-ce dynamisk og start instansen
+  /* ==== [BLOCK: init grid] BEGIN ==== */
   React.useEffect(() => {
     let cancelled = false
-    ;(async () => {
+    const el = containerRef.current
+    if (!el || sheetRef.current) return
+
+    const start = async () => {
       try {
-        if (!containerRef.current || sheetRef.current) return
-        // Dynamic import – robust for ESM/CJS
-        const mod = await import("jspreadsheet-ce")
+        // 1) Prøv fra window (CDN)
+        let factory = resolveFactoryFromWindow()
+
+        // 2) Fallback: dynamisk import
+        if (!factory) {
+          const mod = await import("jspreadsheet-ce")
+          const cand = [
+            (mod as any)?.default?.jspreadsheet,
+            (mod as any)?.jspreadsheet,
+            (mod as any)?.default?.jexcel,
+            (mod as any)?.jexcel,
+            typeof (mod as any)?.default === "function" ? (mod as any).default : null,
+          ].find(f => typeof f === "function")
+          factory = (cand as any) ?? resolveFactoryFromWindow()
+        }
         if (cancelled) return
-        const factory = resolveFactory(mod) || (typeof (window as any) !== "undefined" ? ((window as any).jspreadsheet || (window as any).jexcel) : null)
-        if (!factory) throw new Error("Fant ikke jspreadsheet-fabrikk i modul eller window.")
-        containerRef.current.innerHTML = ""
-        const inst = factory(containerRef.current, {
+        if (!factory) throw new Error("Fant ikke jspreadsheet (hverken via CDN eller import).")
+
+        el.innerHTML = ""
+        const inst = factory(el, {
           data: visibleMatrix,
           columns: COLS as any,
           defaultColWidth: 120,
@@ -160,15 +171,18 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
         setError(null)
         setReady(true)
       } catch (e: any) {
-        console.error("[Progress] jspreadsheet init feilet:", e)
         setError(e?.message || String(e))
+        console.error("[Progress] jspreadsheet init feilet:", e)
       }
-    })()
+    }
+    start()
+
     return () => { cancelled = true; try { sheetRef.current?.destroy?.() } catch {} ; sheetRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  /* ==== [BLOCK: init grid] END ==== */
 
-  // Når data/filter endres etter init → oppdater visning
+  // Oppdater data når filter/rows endres (etter init)
   React.useEffect(() => {
     if (ready && sheetRef.current?.setData) {
       sheetRef.current.setData(visibleMatrix)
@@ -176,7 +190,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
   }, [ready, visibleMatrix])
 
   return (
-    <div style={{ position: "relative", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
+    <div style={{ position: "relative", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", background:"#fff" }}>
       {error && (
         <div style={{ position:"absolute", inset:0, display:"grid", placeItems:"center", color:"#b91c1c", background:"#fff" }}>
           <div>
@@ -185,7 +199,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
           </div>
         </div>
       )}
-      <div ref={containerRef} style={{ minHeight: 560, width: "100%", background: "#fff" }} />
+      <div ref={containerRef} style={{ minHeight: 560, width: "100%" }} />
     </div>
   )
 }
