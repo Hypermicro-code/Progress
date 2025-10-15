@@ -1,8 +1,6 @@
 /* ==== [BLOCK: Imports] BEGIN ==== */
 import React from "react"
-// CSS kan lastes via CDN i index.html; lokalt er ok men valgfritt
-// import "jspreadsheet-ce/dist/jspreadsheet.css"
-// import "jsuites/dist/jsuites.css"
+// CSS lastes gjerne via CDN i index.html (jsuites + jspreadsheet v5)
 import type { Aktivitet } from "@/types"
 /* ==== [BLOCK: Imports] END ==== */
 
@@ -16,15 +14,16 @@ export type AktivitetJSSProps = {
 
 /* ==== [BLOCK: Helpers] BEGIN ==== */
 const COLS = [
-  { title: "#", width: 70 },
-  { title: "Navn", width: 240 },
-  { title: "Start", width: 120 },
-  { title: "Slutt", width: 120 },
-  { title: "Varighet", width: 110 },
-  { title: "Avhengighet", width: 150 },
-  { title: "Ansvarlig", width: 150 },
-  { title: "Status", width: 150 },
+  { title: "#", width: 70, type: "text", readOnly: true },
+  { title: "Navn", width: 240, type: "text" },
+  { title: "Start", width: 120, type: "text" },
+  { title: "Slutt", width: 120, type: "text" },
+  { title: "Varighet", width: 110, type: "numeric" },
+  { title: "Avhengighet", width: 150, type: "text" },
+  { title: "Ansvarlig", width: 150, type: "text" },
+  { title: "Status", width: 150, type: "text" },
 ] as const
+
 const KEY_BY_COL = ["id","navn","start","slutt","varighet","avhengighet","ansvarlig","status"] as const
 
 const toMatrix = (rows: Aktivitet[]) =>
@@ -56,7 +55,8 @@ function factoryFromWindow(): ((el: HTMLElement, opts: any) => any) | null {
 /* ==== [BLOCK: Component] BEGIN ==== */
 export default function AktivitetJSS({ rows, onRowsChange, filterText }: AktivitetJSSProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const sheetRef = React.useRef<any | null>(null)
+  const workbookRef = React.useRef<any | null>(null)  // v5 workbook
+  const worksheetRef = React.useRef<any | null>(null) // v5 worksheet (første ark)
 
   const [status, setStatus] = React.useState<"idle"|"loading"|"ok"|"error">("idle")
   const [message, setMessage] = React.useState<string>("")
@@ -75,21 +75,20 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
     return { visibleMatrix: toMatrix(filtered), visibleToMaster: map }
   }, [rows, filterText])
 
-  /* ==== [BLOCK: init grid] BEGIN ==== */
+  /* ==== [BLOCK: init grid – v5 workbook/worksheets] BEGIN ==== */
   React.useEffect(() => {
     let cancelled = false
     const el = containerRef.current
-    if (!el || sheetRef.current) return
+    if (!el || workbookRef.current) return
 
     const start = async () => {
-      setStatus("loading")
-      setMessage("Starter regneark…")
+      setStatus("loading"); setMessage("Starter regneark…")
 
       try {
         // 1) Prøv via window (CDN)
         let factory = factoryFromWindow()
 
-        // 2) Fallback: dynamisk import (robust for ESM/CJS)
+        // 2) Fallback: dynamisk import
         if (!factory) {
           const mod = await import("jspreadsheet-ce")
           if (cancelled) return
@@ -103,103 +102,118 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
             factoryFromWindow()
         }
         if (cancelled) return
-        if (!factory) throw new Error("Fant ikke jspreadsheet (CDN/import).")
+        if (!factory) throw new Error("Fant ikke jspreadsheet (v5) via CDN/import.")
 
-        // Init
+        // v5 krever workbook-konfig med worksheets[]
         el.innerHTML = ""
-        const inst = factory(el, {
-          data: visibleMatrix,
-          columns: COLS.map(c => ({ title: c.title, width: c.width, type: "text" })) as any,
-          defaultColWidth: 120,
-          tableOverflow: true,
-          tableHeight: "560px",
-          wordWrap: false,
-          freezeColumns: 1,
-          columnDrag: true,
-          columnSorting: true,
-          allowInsertColumn: false,
-          allowDeleteColumn: false,
-          allowManualInsertRow: true,
-          allowManualDeleteRow: true,
+        const workbook = factory(el, {
+          worksheets: [
+            {
+              data: visibleMatrix,
+              columns: COLS as any,
+              // UX/layout
+              defaultColWidth: 120,
+              tableOverflow: true,
+              tableHeight: "560px",
+              wordWrap: false,
+              freezeColumns: 1,
+              columnDrag: true,
+              columnSorting: true,
+              allowInsertColumn: false,
+              allowDeleteColumn: false,
+              allowManualInsertRow: true,
+              allowManualDeleteRow: true,
 
-          onchange: (_ws: any, _cell: any, x: number, y: number, value: any) => {
-            const masterRow = visibleToMaster[y] ?? y
-            if (masterRow == null) return
-            const key = KEY_BY_COL[x]!
-            const next = [...rows]
-            const base = next[masterRow] ?? { id: String(masterRow + 1), navn: "", start: "", slutt: "" }
-            next[masterRow] = { ...base, [key]: key === "varighet" ? numberOrEmpty(value) : String(value ?? "") }
-            for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
-            onRowsChange(next)
-          },
-
-          oninsertrow: (_ws: any, vRow: number, amount: number) => {
-            const mRow = visibleToMaster[vRow] ?? vRow
-            const next = [...rows]
-            for (let i = 0; i < amount; i++) next.splice(mRow, 0, { id: "", navn: "", start: "", slutt: "", varighet: undefined, avhengighet: "", ansvarlig: "", status: "" })
-            for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
-            onRowsChange(next)
-          },
-
-          ondeleterow: (_ws: any, vRow: number, amount: number) => {
-            const mRow = visibleToMaster[vRow] ?? vRow
-            const next = rows.filter((_, i) => i < mRow || i >= mRow + amount)
-            for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
-            onRowsChange(next)
-          },
+              // === Events på worksheet-nivå i v5 ===
+              onchange: (_ws: any, _cell: any, x: number, y: number, value: any) => {
+                const masterRow = visibleToMaster[y] ?? y
+                if (masterRow == null) return
+                const key = KEY_BY_COL[x]!
+                const next = [...rows]
+                const base = next[masterRow] ?? { id: String(masterRow + 1), navn: "", start: "", slutt: "" }
+                next[masterRow] = { ...base, [key]: key === "varighet" ? numberOrEmpty(value) : String(value ?? "") }
+                for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
+                onRowsChange(next)
+              },
+              oninsertrow: (_ws: any, vRow: number, amount: number) => {
+                const mRow = visibleToMaster[vRow] ?? vRow
+                const next = [...rows]
+                for (let i = 0; i < amount; i++) next.splice(mRow, 0, { id: "", navn: "", start: "", slutt: "", varighet: undefined, avhengighet: "", ansvarlig: "", status: "" })
+                for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
+                onRowsChange(next)
+              },
+              ondeleterow: (_ws: any, vRow: number, amount: number) => {
+                const mRow = visibleToMaster[vRow] ?? vRow
+                const next = rows.filter((_, i) => i < mRow || i >= mRow + amount)
+                for (let i = 0; i < next.length; i++) next[i].id = String(i + 1)
+                onRowsChange(next)
+              },
+              contextMenu: (ws: any, x: number, y: number, _e: MouseEvent, items: any[]) => {
+                const custom: any[] = [
+                  { title: "Ny rad over", onclick: () => ws.insertRow(1, y, 1) },
+                  { title: "Ny rad under", onclick: () => ws.insertRow(1, y + 1, 1) },
+                  { type: "line" },
+                  { title: "Slett rad", onclick: () => ws.deleteRow(y, 1) },
+                ]
+                return [...custom, { type: "line" }, ...items]
+              },
+            },
+          ],
+          // Slå av tabs/toolbar (vi styrer via vår UI)
+          tabs: false,
+          toolbar: false,
         })
 
-        sheetRef.current = inst
+        // Hent første worksheet (v5)
+        const worksheet = (workbook?.worksheets?.[0]) ?? (workbook?.[0]) ?? null
+        workbookRef.current = workbook
+        worksheetRef.current = worksheet
 
-        // Verifiser at grid faktisk er rendret før vi skjuler fallback
+        // Verifiser at DOM faktisk ble bygget før vi skjuler fallback
         requestAnimationFrame(() => {
           if (cancelled) return
           const hasNodes = el.childNodes.length > 0
           const rect = el.getBoundingClientRect()
           const painted = hasNodes && rect.height > 100 && rect.width > 100
           if (painted) {
-            setStatus("ok")
-            setMessage("")
-            setShowFallback(false)
+            setStatus("ok"); setMessage(""); setShowFallback(false)
           } else {
-            setStatus("error")
-            setMessage("Grid init startet, men ingenting ble rendret. Viser fallback.")
+            setStatus("error"); setMessage("Grid init startet, men ingenting ble rendret. Viser fallback.")
             setShowFallback(true)
-            console.warn("[Progress] Grid ikke synlig etter init (nodes:", hasNodes, "size:", rect.width, rect.height, ")")
+            console.warn("[Progress] v5 grid ikke synlig etter init (nodes:", hasNodes, "size:", rect.width, rect.height, ")")
           }
         })
       } catch (e: any) {
-        setStatus("error")
-        setMessage(e?.message || String(e))
-        setShowFallback(true)
-        console.error("[Progress] jspreadsheet init feilet:", e)
+        setStatus("error"); setMessage(e?.message || String(e)); setShowFallback(true)
+        console.error("[Progress] jspreadsheet v5 init feilet:", e)
       }
     }
 
     start()
-    return () => { cancelled = true; try { sheetRef.current?.destroy?.() } catch {} ; sheetRef.current = null }
+    return () => {
+      try { workbookRef.current?.destroy?.() } catch {}
+      workbookRef.current = null
+      worksheetRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  /* ==== [BLOCK: init grid] END ==== */
+  /* ==== [BLOCK: init grid – v5 workbook/worksheets] END ==== */
 
   // Oppdater data når filter/rows endres (etter init)
   React.useEffect(() => {
-    if (sheetRef.current?.setData) {
-      sheetRef.current.setData(visibleMatrix)
-    }
+    const ws = worksheetRef.current
+    if (ws?.setData) ws.setData(visibleMatrix)
   }, [visibleMatrix])
 
   /* ==== [BLOCK: UI] BEGIN ==== */
   return (
     <div style={{ position: "relative" }}>
-      {/* Statusstripe */}
       <div style={{ fontSize:12, color:"#6b7280", margin:"0 0 6px 2px" }}>
         {status === "loading" && "Laster regneark…"}
         {status === "ok" && "Regneark klart"}
         {status === "error" && `Regneark-feil: ${message}`}
       </div>
 
-      {/* Fallback-tabell – vises til vi har verifisert at grid er rendret */}
       {showFallback && (
         <div style={{
           border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", background:"#fff",
@@ -215,7 +229,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
                 </tr>
               </thead>
               <tbody>
-                {visibleMatrix.slice(0, 20).map((r, idx) => (
+                {toMatrix(rows).slice(0, 20).map((r, idx) => (
                   <tr key={idx}>
                     {r.map((v, i) => (
                       <td key={i} style={{ padding:"6px 8px", borderBottom:"1px solid #f3f4f6", color:"#111827" }}>
@@ -224,7 +238,7 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
                     ))}
                   </tr>
                 ))}
-                {visibleMatrix.length === 0 && (
+                {rows.length === 0 && (
                   <tr><td colSpan={COLS.length} style={{ padding:12, color:"#6b7280" }}>Ingen rader</td></tr>
                 )}
               </tbody>
@@ -233,7 +247,6 @@ export default function AktivitetJSS({ rows, onRowsChange, filterText }: Aktivit
         </div>
       )}
 
-      {/* Grid-container */}
       <div
         ref={containerRef}
         style={{
