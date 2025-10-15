@@ -9,13 +9,4 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantare
 .toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
 button.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}
 button.btn:hover{background:#f8fafc}
-button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
 input.input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:220px}
-
-/* Context menu */
-.menu-item{
-  appearance:none;background:#fff;border:0;width:100%;text-align:left;padding:8px 10px;border-radius:6px;cursor:pointer
-}
-.menu-item:hover{background:#f3f4f6}
-.menu-item.danger{color:var(--danger)}
-.menu-sep{border:none;border-top:1px solid var(--line);margin:6px 4px}
