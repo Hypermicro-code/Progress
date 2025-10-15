@@ -19,6 +19,7 @@ import type { Aktivitet } from '@/types'
 export type AktivitetAGGridProps = {
   rows: Aktivitet[]
   onRowsChange: (next: Aktivitet[]) => void
+  quickFilterText?: string
 }
 
 /* =========================================================
@@ -34,7 +35,11 @@ const numberParser = (v: unknown) => {
 /* =========================================================
    BLOKK: Komponent
    ========================================================= */
-export default function AktivitetAGGrid({ rows, onRowsChange }: AktivitetAGGridProps) {
+export default function AktivitetAGGrid({
+  rows,
+  onRowsChange,
+  quickFilterText,
+}: AktivitetAGGridProps) {
   const apiRef = useRef<GridApi | null>(null)
   const [rowData, setRowData] = useState<Aktivitet[]>(rows)
 
@@ -103,28 +108,26 @@ export default function AktivitetAGGrid({ rows, onRowsChange }: AktivitetAGGridP
     { headerName: 'Status', field: 'status', width: 160, editable: true },
   ], [setCell])
 
+  // NB: filter slått AV i defaultColDef for å fjerne filter-ikon i header.
   const defaultColDef = useMemo<ColDef>(() => ({
     sortable: true,
     resizable: true,
-    filter: true,
     editable: true,
+    filter: false,
   }), [])
 
   /* =========================================================
-     BLOKK: Grid options (Excel-lignende)
+     BLOKK: Grid options
      ========================================================= */
   const gridOptions = useMemo<GridOptions<Aktivitet>>(() => ({
     defaultColDef,
     columnDefs,
-    enableRangeSelection: true,
-    enableRangeHandle: true, // drag i hjørnet av markering
-    enableFillHandle: true,  // auto-fill
-    undoRedoCellEditing: true,
-    undoRedoCellEditingLimit: 100,
+    // Range-selection (multi-cellemarkering) er en Enterprise-funksjon.
+    // Vi markerer fokusert celle via CSS (se styles.css).
     rowSelection: 'multiple',
     ensureDomOrder: true,
     suppressMultiRangeSelection: false,
-    suppressClipboardPaste: false, // tillat paste
+    suppressClipboardPaste: false,
     enableCellTextSelection: true,
   }), [defaultColDef, columnDefs])
 
@@ -134,7 +137,13 @@ export default function AktivitetAGGrid({ rows, onRowsChange }: AktivitetAGGridP
   const onGridReady = useCallback((params: GridReadyEvent) => {
     apiRef.current = params.api as GridApi
     params.api.sizeColumnsToFit({ defaultMinWidth: 80 })
-  }, [])
+    if (quickFilterText) params.api.setGridOption('quickFilterText', quickFilterText)
+  }, [quickFilterText])
+
+  // Oppdater Quick Filter live
+  React.useEffect(() => {
+    apiRef.current?.setGridOption('quickFilterText', quickFilterText ?? '')
+  }, [quickFilterText])
 
   const addRows = (n = 1) => {
     const maxId = rowData.reduce((m, r) => Math.max(m, Number(r.id || 0)), 0)
